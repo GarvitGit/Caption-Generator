@@ -1,0 +1,550 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "Caption Generator Train.ipynb",
+      "provenance": [],
+      "machine_shape": "hm"
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "accelerator": "GPU"
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "pD1_3ZTa4tJA",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def load_doc(filename):\n",
+        "\tfile = open(filename, 'r')\n",
+        "\ttext = file.read()\n",
+        "\tfile.close()\n",
+        "\treturn text"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "LO46CO3B4uJy",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def load_set(filename):\n",
+        "\tdoc = load_doc(filename)\n",
+        "\tdataset = list()\n",
+        "\tfor line in doc.split('\\n'):\n",
+        "\t\tif len(line) < 1:\n",
+        "\t\t\tcontinue\n",
+        "\t\tidentifier = line.split('.')[0]\n",
+        "\t\tdataset.append(identifier)\n",
+        "\treturn set(dataset)"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "KgGoHL4-47S0",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def load_clean_descriptions(filename, dataset):\n",
+        "\tdoc = load_doc(filename)\n",
+        "\tdescriptions = dict()\n",
+        "\tfor line in doc.split('\\n'):\n",
+        "\t\ttokens = line.split()\n",
+        "\t\timage_id, image_desc = tokens[0], tokens[1:]\n",
+        "\t\tif image_id in dataset:\n",
+        "\t\t\tif image_id not in descriptions:\n",
+        "\t\t\t\tdescriptions[image_id] = list()\n",
+        "\t\t\tdesc = 'startseq ' + ' '.join(image_desc) + ' endseq'\n",
+        "\t\t\tdescriptions[image_id].append(desc)\n",
+        "\treturn descriptions"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "7w6f_9Tg4-ic",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def load_photo_features(filename, dataset):\n",
+        "\tall_features = load(open(filename, 'rb'))\n",
+        "\tfeatures = {k: all_features[k] for k in dataset}\n",
+        "\treturn features"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "mKRgHMnXBAb7",
+        "colab_type": "code",
+        "outputId": "e068f0b1-10fa-4c90-95f4-393e0adb7989",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 122
+        }
+      },
+      "source": [
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Go to this URL in a browser: https://accounts.google.com/o/oauth2/auth?client_id=947318989803-6bn6qk8qdgf4n4g3pfee6491hc0brc4i.apps.googleusercontent.com&redirect_uri=urn%3aietf%3awg%3aoauth%3a2.0%3aoob&response_type=code&scope=email%20https%3a%2f%2fwww.googleapis.com%2fauth%2fdocs.test%20https%3a%2f%2fwww.googleapis.com%2fauth%2fdrive%20https%3a%2f%2fwww.googleapis.com%2fauth%2fdrive.photos.readonly%20https%3a%2f%2fwww.googleapis.com%2fauth%2fpeopleapi.readonly\n",
+            "\n",
+            "Enter your authorization code:\n",
+            "··········\n",
+            "Mounted at /content/drive\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "ThBv_2HK6eVC",
+        "colab_type": "code",
+        "outputId": "0ea094ac-580a-4ab1-e6ed-6d2ae55ff216",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 68
+        }
+      },
+      "source": [
+        "from pickle import load\n",
+        "\n",
+        "filename = '/content/drive/My Drive/Flickr_8k.trainImages.txt'\n",
+        "train = load_set(filename)\n",
+        "print('Dataset: %d' % len(train))\n",
+        "train_descriptions = load_clean_descriptions('/content/drive/My Drive/descriptions.txt', train)\n",
+        "print('Descriptions: train=%d' % len(train_descriptions))\n",
+        "train_features = load_photo_features('/content/drive/My Drive/features.pkl', train)\n",
+        "print('Photos: train=%d' % len(train_features))\n"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Dataset: 6000\n",
+            "Descriptions: train=6000\n",
+            "Photos: train=6000\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "ZeYK25mZ_Ue-",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "from numpy import array\n",
+        "from pickle import load\n",
+        "from keras.preprocessing.text import Tokenizer\n",
+        "from keras.preprocessing.sequence import pad_sequences\n",
+        "from keras.utils import to_categorical\n",
+        "from keras.utils import plot_model\n",
+        "from keras.models import Model\n",
+        "from keras.layers import Input\n",
+        "from keras.layers import Dense\n",
+        "from keras.layers import LSTM\n",
+        "from keras.layers import Embedding\n",
+        "from keras.layers import Dropout\n",
+        "from keras.layers.merge import add\n",
+        "from keras.callbacks import ModelCheckpoint,EarlyStopping,ReduceLROnPlateau"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "FxU8j4Ao7SB4",
+        "colab_type": "code",
+        "outputId": "52887945-17eb-4626-9049-076b98163585",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 34
+        }
+      },
+      "source": [
+        "def to_lines(descriptions):\n",
+        "\tall_desc = list()\n",
+        "\tfor key in descriptions.keys():\n",
+        "\t\t[all_desc.append(d) for d in descriptions[key]]\n",
+        "\treturn all_desc\n",
+        " \n",
+        "def create_tokenizer(descriptions):\n",
+        "\tlines = to_lines(descriptions)\n",
+        "\ttokenizer = Tokenizer()\n",
+        "\ttokenizer.fit_on_texts(lines)\n",
+        "\treturn tokenizer\n",
+        " \n",
+        "tokenizer = create_tokenizer(train_descriptions)\n",
+        "vocab_size = len(tokenizer.word_index) + 1\n",
+        "print('Vocabulary Size: %d' % vocab_size)"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Vocabulary Size: 7579\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "4YWwH5se70ed",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def create_sequences(tokenizer, max_length, descriptions, photos, vocab_size):\n",
+        "\tX1, X2, y = list(), list(), list()\n",
+        "\tfor key, desc_list in descriptions.items():\n",
+        "\t\tfor desc in desc_list:\n",
+        "\t\t\tseq = tokenizer.texts_to_sequences([desc])[0]\n",
+        "\t\t\tfor i in range(1, len(seq)):\n",
+        "\t\t\t\tin_seq, out_seq = seq[:i], seq[i]\n",
+        "\t\t\t\tin_seq = pad_sequences([in_seq], maxlen=max_length)[0]\n",
+        "\t\t\t\tout_seq = to_categorical([out_seq], num_classes=vocab_size)[0]\n",
+        "\t\t\t\tX1.append(photos[key][0])\n",
+        "\t\t\t\tX2.append(in_seq)\n",
+        "\t\t\t\ty.append(out_seq)\n",
+        "\treturn array(X1), array(X2), array(y)"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "cg-Wa8c989cH",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def max_length(descriptions):\n",
+        "\tlines = to_lines(descriptions)\n",
+        "\treturn max(len(d.split()) for d in lines)"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "VxkXtrHI9EqX",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def define_model(vocab_size, max_length):\n",
+        "\tinputs1 = Input(shape=(4096,))\n",
+        "\tfe1 = Dropout(0.5)(inputs1)\n",
+        "\tfe2 = Dense(256, activation='relu')(fe1)\n",
+        "\tinputs2 = Input(shape=(max_length,))\n",
+        "\tse1 = Embedding(vocab_size, 256, mask_zero=True)(inputs2)\n",
+        "\tse2 = Dropout(0.5)(se1)\n",
+        "\tse3 = LSTM(256)(se2)\n",
+        "\tdecoder1 = add([fe2, se3])\n",
+        "\tdecoder2 = Dense(256, activation='relu')(decoder1)\n",
+        "\toutputs = Dense(vocab_size, activation='softmax')(decoder2)\n",
+        "\tmodel = Model(inputs=[inputs1, inputs2], outputs=outputs)\n",
+        "\tmodel.compile(loss='categorical_crossentropy', optimizer='adam')\n",
+        "\tprint(model.summary())\n",
+        "\tplot_model(model, to_file='/content/drive/My Drive/model.png', show_shapes=True)\n",
+        "\treturn model"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "XMRIn4tt_f-s",
+        "colab_type": "code",
+        "outputId": "765eaf6b-ef8c-436c-a145-2add7adeb70f",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 34
+        }
+      },
+      "source": [
+        "max_length = max_length(train_descriptions)\n",
+        "print('Description Length: %d' % max_length)\n",
+        "X1train, X2train, ytrain = create_sequences(tokenizer, max_length, train_descriptions, train_features, vocab_size)"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Description Length: 34\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "IdeovqRQBwcP",
+        "colab_type": "code",
+        "outputId": "8864fb78-9716-4463-b3d8-6bd675915e2d",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 68
+        }
+      },
+      "source": [
+        "filename = '/content/drive/My Drive/Flickr_8k.devImages.txt'\n",
+        "test = load_set(filename)\n",
+        "print('Dataset: %d' % len(test))\n",
+        "test_descriptions = load_clean_descriptions('/content/drive/My Drive/descriptions.txt', test)\n",
+        "print('Descriptions: test=%d' % len(test_descriptions))\n",
+        "test_features = load_photo_features('/content/drive/My Drive/features.pkl', test)\n",
+        "print('Photos: test=%d' % len(test_features))\n",
+        "X1test, X2test, ytest = create_sequences(tokenizer, max_length, test_descriptions, test_features, vocab_size)"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Dataset: 1000\n",
+            "Descriptions: test=1000\n",
+            "Photos: test=1000\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "54Z-odDYCQzB",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "filepath = '/content/drive/My Drive/model-ep{epoch:03d}-loss{loss:.3f}-val_loss{val_loss:.3f}.h5'\n",
+        "checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=1, save_best_only=True, mode='min')\n",
+        "\n",
+        "early=EarlyStopping(patience=10)\n",
+        "reduce=ReduceLROnPlateau(monitor='val_acc',factor=0.5,patience=3,min_lr=0.00001,verbose=1)\n",
+        "callback=[early,reduce,checkpoint]"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "KEWkVrnO-9hY",
+        "colab_type": "code",
+        "outputId": "24d679c3-372a-44e6-f0d1-e5c317d0e5fd",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 1000
+        }
+      },
+      "source": [
+        "model = define_model(vocab_size, max_length)\n",
+        "\n",
+        "model.fit([X1train, X2train], ytrain, epochs=20, verbose=2, callbacks=callback, validation_data=([X1test, X2test], ytest))"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:66: The name tf.get_default_graph is deprecated. Please use tf.compat.v1.get_default_graph instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:541: The name tf.placeholder is deprecated. Please use tf.compat.v1.placeholder instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:148: The name tf.placeholder_with_default is deprecated. Please use tf.compat.v1.placeholder_with_default instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:3733: calling dropout (from tensorflow.python.ops.nn_ops) with keep_prob is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please use `rate` instead of `keep_prob`. Rate should be set to `rate = 1 - keep_prob`.\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:4432: The name tf.random_uniform is deprecated. Please use tf.random.uniform instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:3239: where (from tensorflow.python.ops.array_ops) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Use tf.where in 2.0, which has the same broadcast rule as np.where\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/optimizers.py:793: The name tf.train.Optimizer is deprecated. Please use tf.compat.v1.train.Optimizer instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:3576: The name tf.log is deprecated. Please use tf.math.log instead.\n",
+            "\n",
+            "Model: \"model_1\"\n",
+            "__________________________________________________________________________________________________\n",
+            "Layer (type)                    Output Shape         Param #     Connected to                     \n",
+            "==================================================================================================\n",
+            "input_2 (InputLayer)            (None, 34)           0                                            \n",
+            "__________________________________________________________________________________________________\n",
+            "input_1 (InputLayer)            (None, 4096)         0                                            \n",
+            "__________________________________________________________________________________________________\n",
+            "embedding_1 (Embedding)         (None, 34, 256)      1940224     input_2[0][0]                    \n",
+            "__________________________________________________________________________________________________\n",
+            "dropout_1 (Dropout)             (None, 4096)         0           input_1[0][0]                    \n",
+            "__________________________________________________________________________________________________\n",
+            "dropout_2 (Dropout)             (None, 34, 256)      0           embedding_1[0][0]                \n",
+            "__________________________________________________________________________________________________\n",
+            "dense_1 (Dense)                 (None, 256)          1048832     dropout_1[0][0]                  \n",
+            "__________________________________________________________________________________________________\n",
+            "lstm_1 (LSTM)                   (None, 256)          525312      dropout_2[0][0]                  \n",
+            "__________________________________________________________________________________________________\n",
+            "add_1 (Add)                     (None, 256)          0           dense_1[0][0]                    \n",
+            "                                                                 lstm_1[0][0]                     \n",
+            "__________________________________________________________________________________________________\n",
+            "dense_2 (Dense)                 (None, 256)          65792       add_1[0][0]                      \n",
+            "__________________________________________________________________________________________________\n",
+            "dense_3 (Dense)                 (None, 7579)         1947803     dense_2[0][0]                    \n",
+            "==================================================================================================\n",
+            "Total params: 5,527,963\n",
+            "Trainable params: 5,527,963\n",
+            "Non-trainable params: 0\n",
+            "__________________________________________________________________________________________________\n",
+            "None\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:1033: The name tf.assign_add is deprecated. Please use tf.compat.v1.assign_add instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:1020: The name tf.assign is deprecated. Please use tf.compat.v1.assign instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:3005: The name tf.Session is deprecated. Please use tf.compat.v1.Session instead.\n",
+            "\n",
+            "Train on 306404 samples, validate on 50903 samples\n",
+            "Epoch 1/20\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:190: The name tf.get_default_session is deprecated. Please use tf.compat.v1.get_default_session instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:197: The name tf.ConfigProto is deprecated. Please use tf.compat.v1.ConfigProto instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:207: The name tf.global_variables is deprecated. Please use tf.compat.v1.global_variables instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:216: The name tf.is_variable_initialized is deprecated. Please use tf.compat.v1.is_variable_initialized instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:223: The name tf.variables_initializer is deprecated. Please use tf.compat.v1.variables_initializer instead.\n",
+            "\n",
+            " - 667s - loss: 4.5039 - val_loss: 4.0632\n",
+            "\n",
+            "Epoch 00001: val_loss improved from inf to 4.06322, saving model to /content/drive/My Drive/model-ep001-loss4.504-val_loss4.063.h5\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "stream",
+          "text": [
+            "/usr/local/lib/python3.6/dist-packages/keras/callbacks.py:1379: RuntimeWarning: Reduce LR on plateau conditioned on metric `val_acc` which is not available. Available metrics are: val_loss,loss,lr\n",
+            "  (self.monitor, ','.join(list(logs.keys()))), RuntimeWarning\n"
+          ],
+          "name": "stderr"
+        },
+        {
+          "output_type": "stream",
+          "text": [
+            "Epoch 2/20\n",
+            " - 666s - loss: 3.8703 - val_loss: 3.9097\n",
+            "\n",
+            "Epoch 00002: val_loss improved from 4.06322 to 3.90970, saving model to /content/drive/My Drive/model-ep002-loss3.870-val_loss3.910.h5\n",
+            "Epoch 3/20\n",
+            " - 662s - loss: 3.6890 - val_loss: 3.8679\n",
+            "\n",
+            "Epoch 00003: val_loss improved from 3.90970 to 3.86794, saving model to /content/drive/My Drive/model-ep003-loss3.689-val_loss3.868.h5\n",
+            "Epoch 4/20\n",
+            " - 657s - loss: 3.6014 - val_loss: 3.8638\n",
+            "\n",
+            "Epoch 00004: val_loss improved from 3.86794 to 3.86381, saving model to /content/drive/My Drive/model-ep004-loss3.601-val_loss3.864.h5\n",
+            "Epoch 5/20\n",
+            " - 642s - loss: 3.5493 - val_loss: 3.8560\n",
+            "\n",
+            "Epoch 00005: val_loss improved from 3.86381 to 3.85604, saving model to /content/drive/My Drive/model-ep005-loss3.549-val_loss3.856.h5\n",
+            "Epoch 6/20\n",
+            " - 630s - loss: 3.5158 - val_loss: 3.8640\n",
+            "\n",
+            "Epoch 00006: val_loss did not improve from 3.85604\n",
+            "Epoch 7/20\n",
+            " - 633s - loss: 3.4990 - val_loss: 3.8778\n",
+            "\n",
+            "Epoch 00007: val_loss did not improve from 3.85604\n",
+            "Epoch 8/20\n",
+            " - 634s - loss: 3.4880 - val_loss: 3.9034\n",
+            "\n",
+            "Epoch 00008: val_loss did not improve from 3.85604\n",
+            "Epoch 9/20\n",
+            " - 631s - loss: 3.4797 - val_loss: 3.9076\n",
+            "\n",
+            "Epoch 00009: val_loss did not improve from 3.85604\n",
+            "Epoch 10/20\n",
+            " - 631s - loss: 3.4771 - val_loss: 3.9116\n",
+            "\n",
+            "Epoch 00010: val_loss did not improve from 3.85604\n",
+            "Epoch 11/20\n",
+            " - 629s - loss: 3.4750 - val_loss: 3.9333\n",
+            "\n",
+            "Epoch 00011: val_loss did not improve from 3.85604\n",
+            "Epoch 12/20\n",
+            " - 630s - loss: 3.4760 - val_loss: 3.9442\n",
+            "\n",
+            "Epoch 00012: val_loss did not improve from 3.85604\n",
+            "Epoch 13/20\n",
+            " - 630s - loss: 3.4745 - val_loss: 3.9463\n",
+            "\n",
+            "Epoch 00013: val_loss did not improve from 3.85604\n",
+            "Epoch 14/20\n",
+            " - 632s - loss: 3.4781 - val_loss: 3.9447\n",
+            "\n",
+            "Epoch 00014: val_loss did not improve from 3.85604\n",
+            "Epoch 15/20\n",
+            " - 627s - loss: 3.4815 - val_loss: 3.9556\n",
+            "\n",
+            "Epoch 00015: val_loss did not improve from 3.85604\n"
+          ],
+          "name": "stdout"
+        },
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "<keras.callbacks.History at 0x7f1169968f28>"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          },
+          "execution_count": 19
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,482 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "Caption Generator Evaluate.ipynb",
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "JvHUmDZ5hmqb",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def word_for_id(integer, tokenizer):\n",
+        "\tfor word, index in tokenizer.word_index.items():\n",
+        "\t\tif index == integer:\n",
+        "\t\t\treturn word\n",
+        "\treturn None\n",
+        " \n",
+        "def generate_desc(model, tokenizer, photo, max_length):\n",
+        "\tin_text = 'startseq'\n",
+        "\tfor i in range(max_length):\n",
+        "\t\tsequence = tokenizer.texts_to_sequences([in_text])[0]\n",
+        "\t\tsequence = pad_sequences([sequence], maxlen=max_length)\n",
+        "\t\tyhat = model.predict([photo,sequence], verbose=0)\n",
+        "\t\tyhat = argmax(yhat)\n",
+        "\t\tword = word_for_id(yhat, tokenizer)\n",
+        "\t\tif word is None:\n",
+        "\t\t\tbreak\n",
+        "\t\tin_text += ' ' + word\n",
+        "\t\tif word == 'endseq':\n",
+        "\t\t\tbreak\n",
+        "\treturn in_text"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "5VzaULCziG4q",
+        "colab_type": "code",
+        "outputId": "f8c5211f-a07c-4675-d187-b7795f56fc8e",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 97
+        }
+      },
+      "source": [
+        "from numpy import argmax\n",
+        "from pickle import load\n",
+        "from keras.preprocessing.text import Tokenizer\n",
+        "from keras.preprocessing.sequence import pad_sequences\n",
+        "from keras.models import load_model\n",
+        "from nltk.translate.bleu_score import corpus_bleu"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Using TensorFlow backend.\n"
+          ],
+          "name": "stderr"
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/html": [
+              "<p style=\"color: red;\">\n",
+              "The default version of TensorFlow in Colab will soon switch to TensorFlow 2.x.<br>\n",
+              "We recommend you <a href=\"https://www.tensorflow.org/guide/migrate\" target=\"_blank\">upgrade</a> now \n",
+              "or ensure your notebook will continue to use TensorFlow 1.x via the <code>%tensorflow_version 1.x</code> magic:\n",
+              "<a href=\"https://colab.research.google.com/notebooks/tensorflow_version.ipynb\" target=\"_blank\">more info</a>.</p>\n"
+            ],
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ]
+          },
+          "metadata": {
+            "tags": []
+          }
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "bsLRdlupiR4b",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def load_doc(filename):\n",
+        "\tfile = open(filename, 'r')\n",
+        "\ttext = file.read()\n",
+        "\tfile.close()\n",
+        "\treturn text"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "Vh3k9HgWicAN",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def load_set(filename):\n",
+        "\tdoc = load_doc(filename)\n",
+        "\tdataset = list()\n",
+        "\tfor line in doc.split('\\n'):\n",
+        "\t\tif len(line) < 1:\n",
+        "\t\t\tcontinue\n",
+        "\t\tidentifier = line.split('.')[0]\n",
+        "\t\tdataset.append(identifier)\n",
+        "\treturn set(dataset)\n",
+        " "
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "acby4evmikX-",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def load_clean_descriptions(filename, dataset):\n",
+        "\tdoc = load_doc(filename)\n",
+        "\tdescriptions = dict()\n",
+        "\tfor line in doc.split('\\n'):\n",
+        "\t\ttokens = line.split()\n",
+        "\t\timage_id, image_desc = tokens[0], tokens[1:]\n",
+        "\t\tif image_id in dataset:\n",
+        "\t\t\tif image_id not in descriptions:\n",
+        "\t\t\t\tdescriptions[image_id] = list()\n",
+        "\t\t\tdesc = 'startseq ' + ' '.join(image_desc) + ' endseq'\n",
+        "\t\t\tdescriptions[image_id].append(desc)\n",
+        "\treturn descriptions"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "76_J0bzditAh",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def load_photo_features(filename, dataset):\n",
+        "\tall_features = load(open(filename, 'rb'))\n",
+        "\tfeatures = {k: all_features[k] for k in dataset}\n",
+        "\treturn features"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "T_t6FdUbixD2",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def to_lines(descriptions):\n",
+        "\tall_desc = list()\n",
+        "\tfor key in descriptions.keys():\n",
+        "\t\t[all_desc.append(d) for d in descriptions[key]]\n",
+        "\treturn all_desc"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "lXt2nJngi0L7",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def create_tokenizer(descriptions):\n",
+        "\tlines = to_lines(descriptions)\n",
+        "\ttokenizer = Tokenizer()\n",
+        "\ttokenizer.fit_on_texts(lines)\n",
+        "\treturn tokenizer"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "dSTjl1COi2wm",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def max_length(descriptions):\n",
+        "\tlines = to_lines(descriptions)\n",
+        "\treturn max(len(d.split()) for d in lines)"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "CNYQUTkgi5k7",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def word_for_id(integer, tokenizer):\n",
+        "\tfor word, index in tokenizer.word_index.items():\n",
+        "\t\tif index == integer:\n",
+        "\t\t\treturn word\n",
+        "\treturn None"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "M0517o4Ii8mB",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def generate_desc(model, tokenizer, photo, max_length):\n",
+        "\tin_text = 'startseq'\n",
+        "\tfor i in range(max_length):\n",
+        "\t\tsequence = tokenizer.texts_to_sequences([in_text])[0]\n",
+        "\t\tsequence = pad_sequences([sequence], maxlen=max_length)\n",
+        "\t\tyhat = model.predict([photo,sequence], verbose=0)\n",
+        "\t\tyhat = argmax(yhat)\n",
+        "\t\tword = word_for_id(yhat, tokenizer)\n",
+        "\t\tif word is None:\n",
+        "\t\t\tbreak\n",
+        "\t\tin_text += ' ' + word\n",
+        "\t\tif word == 'endseq':\n",
+        "\t\t\tbreak\n",
+        "\treturn in_text"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "M-AcQqUXjF-r",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "def evaluate_model(model, descriptions, photos, tokenizer, max_length):\n",
+        "\tactual, predicted = list(), list()\n",
+        "\tfor key, desc_list in descriptions.items():\n",
+        "\t\tyhat = generate_desc(model, tokenizer, photos[key], max_length)\n",
+        "\t\treferences = [d.split() for d in desc_list]\n",
+        "\t\tactual.append(references)\n",
+        "\t\tpredicted.append(yhat.split())\n",
+        "\tprint('BLEU-1: %f' % corpus_bleu(actual, predicted, weights=(1.0, 0, 0, 0)))\n",
+        "\tprint('BLEU-2: %f' % corpus_bleu(actual, predicted, weights=(0.5, 0.5, 0, 0)))\n",
+        "\tprint('BLEU-3: %f' % corpus_bleu(actual, predicted, weights=(0.3, 0.3, 0.3, 0)))\n",
+        "\tprint('BLEU-4: %f' % corpus_bleu(actual, predicted, weights=(0.25, 0.25, 0.25, 0.25)))"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "4d7qw96Ojcu0",
+        "colab_type": "code",
+        "outputId": "4cb497fc-e69a-4888-fd23-2e78866fffdc",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 122
+        }
+      },
+      "source": [
+        "from google.colab import drive\n",
+        "drive.mount('/content/drive')"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Go to this URL in a browser: https://accounts.google.com/o/oauth2/auth?client_id=947318989803-6bn6qk8qdgf4n4g3pfee6491hc0brc4i.apps.googleusercontent.com&redirect_uri=urn%3aietf%3awg%3aoauth%3a2.0%3aoob&response_type=code&scope=email%20https%3a%2f%2fwww.googleapis.com%2fauth%2fdocs.test%20https%3a%2f%2fwww.googleapis.com%2fauth%2fdrive%20https%3a%2f%2fwww.googleapis.com%2fauth%2fdrive.photos.readonly%20https%3a%2f%2fwww.googleapis.com%2fauth%2fpeopleapi.readonly\n",
+            "\n",
+            "Enter your authorization code:\n",
+            "··········\n",
+            "Mounted at /content/drive\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "jS2vg43KjSRZ",
+        "colab_type": "code",
+        "outputId": "b2d5cc56-fab7-4aab-beda-de33131fd0b2",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 85
+        }
+      },
+      "source": [
+        "filename = '/content/drive/My Drive/Flickr_8k.trainImages.txt'\n",
+        "train = load_set(filename)\n",
+        "print('Dataset: %d' % len(train))\n",
+        "train_descriptions = load_clean_descriptions('/content/drive/My Drive/descriptions.txt', train)\n",
+        "print('Descriptions: train=%d' % len(train_descriptions))\n",
+        "tokenizer = create_tokenizer(train_descriptions)\n",
+        "vocab_size = len(tokenizer.word_index) + 1\n",
+        "print('Vocabulary Size: %d' % vocab_size)\n",
+        "max_length = max_length(train_descriptions)\n",
+        "print('Description Length: %d' % max_length)"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Dataset: 6000\n",
+            "Descriptions: train=6000\n",
+            "Vocabulary Size: 7579\n",
+            "Description Length: 34\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "8MnMqzSAkBZX",
+        "colab_type": "code",
+        "outputId": "b2f3e94c-e1fd-48f3-cae2-0b522cdc4930",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 68
+        }
+      },
+      "source": [
+        "filename = '/content/drive/My Drive/Flickr_8k.testImages.txt'\n",
+        "test = load_set(filename)\n",
+        "print('Dataset: %d' % len(test))\n",
+        "test_descriptions = load_clean_descriptions('/content/drive/My Drive/descriptions.txt', test)\n",
+        "print('Descriptions: test=%d' % len(test_descriptions))\n",
+        "test_features = load_photo_features('/content/drive/My Drive/features.pkl', test)\n",
+        "print('Photos: test=%d' % len(test_features))"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "Dataset: 1000\n",
+            "Descriptions: test=1000\n",
+            "Photos: test=1000\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "wwHzv3QGkac2",
+        "colab_type": "code",
+        "outputId": "68aaa94a-5ec1-4cc7-c52e-8837bdf72fff",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 683
+        }
+      },
+      "source": [
+        "filename = '/content/drive/My Drive/model-ep005-loss3.549-val_loss3.856.h5'\n",
+        "model = load_model(filename)\n",
+        "evaluate_model(model, test_descriptions, test_features, tokenizer, max_length)"
+      ],
+      "execution_count": 0,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:541: The name tf.placeholder is deprecated. Please use tf.compat.v1.placeholder instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:66: The name tf.get_default_graph is deprecated. Please use tf.compat.v1.get_default_graph instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:4432: The name tf.random_uniform is deprecated. Please use tf.random.uniform instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:148: The name tf.placeholder_with_default is deprecated. Please use tf.compat.v1.placeholder_with_default instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:3733: calling dropout (from tensorflow.python.ops.nn_ops) with keep_prob is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Please use `rate` instead of `keep_prob`. Rate should be set to `rate = 1 - keep_prob`.\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:3239: where (from tensorflow.python.ops.array_ops) is deprecated and will be removed in a future version.\n",
+            "Instructions for updating:\n",
+            "Use tf.where in 2.0, which has the same broadcast rule as np.where\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:190: The name tf.get_default_session is deprecated. Please use tf.compat.v1.get_default_session instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:197: The name tf.ConfigProto is deprecated. Please use tf.compat.v1.ConfigProto instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:203: The name tf.Session is deprecated. Please use tf.compat.v1.Session instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:207: The name tf.global_variables is deprecated. Please use tf.compat.v1.global_variables instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:216: The name tf.is_variable_initialized is deprecated. Please use tf.compat.v1.is_variable_initialized instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:223: The name tf.variables_initializer is deprecated. Please use tf.compat.v1.variables_initializer instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/optimizers.py:793: The name tf.train.Optimizer is deprecated. Please use tf.compat.v1.train.Optimizer instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:3576: The name tf.log is deprecated. Please use tf.math.log instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:1033: The name tf.assign_add is deprecated. Please use tf.compat.v1.assign_add instead.\n",
+            "\n",
+            "WARNING:tensorflow:From /usr/local/lib/python3.6/dist-packages/keras/backend/tensorflow_backend.py:1020: The name tf.assign is deprecated. Please use tf.compat.v1.assign instead.\n",
+            "\n",
+            "BLEU-1: 0.477807\n",
+            "BLEU-2: 0.257658\n",
+            "BLEU-3: 0.181690\n",
+            "BLEU-4: 0.084151\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "gMXBeLBikmo_",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        "from pickle import dump\n",
+        "tokenizer = create_tokenizer(train_descriptions)\n",
+        "dump(tokenizer, open('/content/drive/My Drive/tokenizer.pkl', 'wb'))"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "H7GIkHOHqzyD",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    }
+  ]
+}
